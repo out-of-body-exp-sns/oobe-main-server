@@ -1,5 +1,16 @@
-import { Controller, Get, Post, Body, Res, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Res,
+  HttpStatus,
+  Sse,
+} from '@nestjs/common';
 import { AppService } from './app.service';
+import { IUser } from './dto/User';
+import { Observable, interval } from 'rxjs';
+import { switchMap } from 'rxjs/operators';
 
 @Controller()
 export class AppController {
@@ -11,20 +22,26 @@ export class AppController {
   }
 
   @Post('update-user-state')
-  async postUserState(
-    @Body('id') id: string,
-    @Body('name') name: string,
-    @Body('lat') lat: number,
-    @Body('lng') lng: number,
-    @Res() res,
-  ) {
+  async postUserState(@Body() userData: IUser, @Res() res) {
     try {
-      await this.appService.updateLocation(id, name, lat, lng);
+      await this.appService.updateLocation(userData);
+      // console.log('User State updated successfully');
       res.status(HttpStatus.OK).send('User State updated successfully');
     } catch (err) {
       res
         .status(HttpStatus.INTERNAL_SERVER_ERROR)
         .send('Error updating user state');
     }
+  }
+
+  @Sse('sse')
+  streamEvents(): Observable<{ data: IUser[] }> {
+    return interval(1000).pipe(
+      switchMap(() =>
+        this.appService
+          .fetchAllUsersFromRedis()
+          .then((users) => ({ data: users })),
+      ),
+    );
   }
 }
